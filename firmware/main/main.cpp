@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 M5Stack Technology CO LTD
+ * SPDX-FileCopyrightText: 2026 KittyChan Project
  *
  * SPDX-License-Identifier: MIT
  */
@@ -15,48 +15,20 @@ using namespace smooth_ui_toolkit;
 
 extern "C" void app_main(void)
 {
-    // Setup logger
     mclog::set_level(mclog::level_info);
     mclog::set_time_format(mclog::time_format_unix_milliseconds);
 
-    // HAL init
+    // HAL init: sets up display, servos (UART1), touch, IMU
     GetHAL().init();
 
-    // Setup ui hal
     ui_hal::on_delay([](uint32_t ms) { GetHAL().delay(ms); });
     ui_hal::on_get_tick([]() { return GetHAL().millis(); });
 
-    const bool skip_mooncake =
-        GetHAL().getXiaozhiConfig().startAiAgentOnBoot && GetHAL().getWarmRebootTarget() < 0;
+    // Install only AppPiControl — no launcher, no AI agent, no WiFi/BLE started
+    GetMooncake().installApp(std::make_unique<AppPiControl>());
 
-    if (!skip_mooncake) {
-        // Install apps
-        GetMooncake().installApp(std::make_unique<AppLauncher>());
-        GetMooncake().installApp(std::make_unique<AppAiAgent>());
-        GetMooncake().installApp(std::make_unique<AppAvatar>());
-        GetMooncake().installApp(std::make_unique<AppEspnowControl>());
-        GetMooncake().installApp(std::make_unique<AppAppCenter>());
-        GetMooncake().installApp(std::make_unique<AppEzdata>());
-        GetMooncake().installApp(std::make_unique<AppDance>());
-        GetMooncake().installApp(std::make_unique<AppSetup>());
-
-        // Main loop
-        while (1) {
-            GetHAL().feedTheDog();
-            GetHAL().updateHeapStatusLog();
-
-            GetMooncake().update();
-
-            if (GetHAL().isXiaozhiStartRequested()) {
-                break;
-            }
-        }
-
-        // Uninstall all apps and destroy mooncake
-        GetMooncake().uninstallAllApps();
-        DestroyMooncake();
+    while (1) {
+        GetHAL().feedTheDog();
+        GetMooncake().update();
     }
-
-    // Start xiaozhi, never returns
-    GetHAL().startXiaozhi();
 }
