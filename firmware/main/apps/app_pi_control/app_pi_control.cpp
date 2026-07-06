@@ -21,10 +21,10 @@ using namespace stackchan;
 
 static constexpr auto TAG = "AppPiControl";
 
-// PORT.C Grove connector on CoreS3 SE
-static constexpr uart_port_t kPortCUart    = UART_NUM_2;
-static constexpr int         kPortCTxGpio  = 18;  // ESP32 TX (unused for Pi→SC comms)
-static constexpr int         kPortCRxGpio  = 17;  // Pi TX → ESP32 RX
+// USB-C via CH9102F bridge — appears as /dev/ttyUSB0 on Pi
+static constexpr uart_port_t kPortCUart    = UART_NUM_0;
+static constexpr int         kPortCTxGpio  = UART_PIN_NO_CHANGE;  // already set by IDF
+static constexpr int         kPortCRxGpio  = UART_PIN_NO_CHANGE;  // already set by IDF
 static constexpr int         kPortCBaud    = 115200;
 static constexpr size_t      kUartBufSize  = 512;
 static constexpr size_t      kLineBufSize  = 256;
@@ -45,8 +45,9 @@ static avatar::Emotion emotion_from_string(const char* name)
     if (strcasecmp(name, "happy")     == 0) return avatar::Emotion::Happy;
     if (strcasecmp(name, "sad")       == 0) return avatar::Emotion::Sad;
     if (strcasecmp(name, "angry")     == 0) return avatar::Emotion::Angry;
-    if (strcasecmp(name, "surprised") == 0) return avatar::Emotion::Surprised;
+    if (strcasecmp(name, "surprised") == 0) return avatar::Emotion::Sleepy;
     if (strcasecmp(name, "doubt")     == 0) return avatar::Emotion::Doubt;
+    if (strcasecmp(name, "sleepy")    == 0) return avatar::Emotion::Sleepy;
     return avatar::Emotion::Neutral;
 }
 
@@ -64,7 +65,6 @@ static void uart_reader_task(void* arg)
 
     uart_driver_install(kPortCUart, kUartBufSize * 2, 0, 0, nullptr, 0);
     uart_param_config(kPortCUart, &uart_cfg);
-    uart_set_pin(kPortCUart, kPortCTxGpio, kPortCRxGpio, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
     char    line[kLineBufSize];
     int     line_len = 0;
@@ -142,8 +142,7 @@ void AppPiControl::onOpen()
     }
 
     xTaskCreate(uart_reader_task, "pi_uart", 4096, _cmd_queue, 5, &_uart_task);
-    mclog::tagInfo(TAG, "UART2 reader started — GPIO RX:{} TX:{} @ {} baud",
-                   kPortCRxGpio, kPortCTxGpio, kPortCBaud);
+    mclog::tagInfo(TAG, "UART0 reader started (USB-C via CH9102F) @ {} baud", kPortCBaud);
 }
 
 void AppPiControl::onRunning()
