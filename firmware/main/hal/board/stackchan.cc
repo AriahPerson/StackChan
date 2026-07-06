@@ -61,7 +61,10 @@ public:
         WriteReg(0x95, 33 - 5);
         WriteReg(0x27, 0x00);
 
-        auto ret = setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_700MA);
+        // 200mA: ESP32 draws ~200mA at load, so 700mA charge (the upstream default)
+        // pushes total USB draw to ~900mA, tripping the Pi 5's over-current protection.
+        // 200mA keeps total draw ~400mA, safely within the 500mA USB budget.
+        auto ret = setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_200MA);
         if (!ret) {
             ESP_LOGE(TAG, "Set charge current failed");
         } else {
