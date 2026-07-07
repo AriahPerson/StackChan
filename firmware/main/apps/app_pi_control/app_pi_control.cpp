@@ -143,6 +143,15 @@ void AppPiControl::onOpen()
 {
     mclog::tagInfo(TAG, "on open");
 
+    // Enable servo power now (not during io_expander_init) to avoid boot inrush
+    // that trips the Pi 5's 500 mA USB overcurrent protection.
+    GetHAL().setServoPowerEnabled(true);
+    GetHAL().delay(200); // settling time for servo power rail
+
+    // Clear the "Starting up ..." splash overlay — AppPiControl replaces the launcher
+    // that would normally do this.
+    GetHAL().bootLogo.reset();
+
     {
         LvglLockGuard lock;
         auto avatar = std::make_unique<avatar::DefaultAvatar>();

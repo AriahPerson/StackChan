@@ -38,11 +38,11 @@ void Hal::io_expander_init()
     }
 
     if (_io_expander) {
-        // VM EN
+        // VM EN — pin direction/pull configured here; power enabled later by app to avoid
+        // inrush current during boot tripping the Pi 5's 500 mA USB OC protection.
         _io_expander->setDirection(0, true);  // Output
         _io_expander->setPullMode(0, true);   // Pull-up
-        GetHAL().setServoPowerEnabled(true);
-        vTaskDelay(pdMS_TO_TICKS(200));
+        GetHAL().setServoPowerEnabled(false); // servos off until app explicitly enables
 
         // RGB
         _io_expander->setDirection(13, true);   // Output
