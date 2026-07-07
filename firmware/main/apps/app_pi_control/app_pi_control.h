@@ -8,6 +8,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+#include <atomic>
+#include <lvgl.h>
 
 /**
  * @brief Listens on PORT.C UART for newline-delimited JSON commands from the Pi.
@@ -32,4 +34,8 @@ private:
 
     QueueHandle_t _cmd_queue = nullptr;
     TaskHandle_t  _uart_task = nullptr;
+
+    // Shared between UART reader task and main loop for status display
+    std::atomic<uint32_t> _rx_count{0};
+    lv_obj_t* _status_label = nullptr;
 };

@@ -14,6 +14,7 @@
 #include <driver/gpio.h>
 #include <cJSON.h>
 #include <cstring>
+#include <cstdio>
 
 using namespace mooncake;
 using namespace smooth_ui_toolkit::lvgl_cpp;
@@ -39,6 +40,11 @@ struct PiCommand {
     char  emotion[32] = {};
 };
 
+struct UartTaskArg {
+    QueueHandle_t         queue;
+    std::atomic<uint32_t>* rx_count;
+};
+
 static avatar::Emotion emotion_from_string(const char* name)
 {
     if (!name)                            return avatar::Emotion::Neutral;
@@ -53,7 +59,9 @@ static avatar::Emotion emotion_from_string(const char* name)
 
 static void uart_reader_task(void* arg)
 {
-    QueueHandle_t queue = static_cast<QueueHandle_t>(arg);
+    auto* targ = static_cast<UartTaskArg*>(arg);
+    QueueHandle_t          queue    = targ->queue;
+    std::atomic<uint32_t>* rx_count = targ->rx_count;
 
     uart_config_t uart_cfg = {};
     uart_cfg.baud_rate      = kPortCBaud;
@@ -110,6 +118,7 @@ static void uart_reader_task(void* arg)
             }
 
             cJSON_Delete(root);
+            rx_count->fetch_add(1, std::memory_order_relaxed);
             xQueueSend(queue, &cmd, 0);
         } else {
             if (line_len < (int)kLineBufSize - 1) {
@@ -139,9 +148,21 @@ void AppPiControl::onOpen()
         auto avatar = std::make_unique<avatar::DefaultAvatar>();
         avatar->init(lv_screen_active());
         GetStackChan().attachAvatar(std::move(avatar));
+
+        // Small diagnostic label in bottom-left corner
+        _status_label = lv_label_create(lv_screen_active());
+        lv_obj_set_style_text_font(_status_label, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(_status_label, lv_color_hex(0x888888), 0);
+        lv_obj_set_style_bg_opa(_status_label, LV_OPA_TRANSP, 0);
+        lv_obj_align(_status_label, LV_ALIGN_BOTTOM_LEFT, 4, -4);
+        lv_label_set_text(_status_label, "USB waiting...");
     }
 
-    xTaskCreate(uart_reader_task, "pi_uart", 4096, _cmd_queue, 5, &_uart_task);
+    // Pass both queue and rx_count to the UART task
+    static UartTaskArg task_arg;
+    task_arg.queue    = _cmd_queue;
+    task_arg.rx_count = &_rx_count;
+    xTaskCreate(uart_reader_task, "pi_uart", 4096, &task_arg, 5, &_uart_task);
     mclog::tagInfo(TAG, "UART0 reader started (USB-C via CH9102F) @ {} baud", kPortCBaud);
 }
 
@@ -163,6 +184,20 @@ void AppPiControl::onRunning()
         }
     }
 
+    // Update diagnostic label every ~30 frames
+    static uint32_t frame = 0;
+    if (_status_label && (++frame % 30 == 0)) {
+        uint32_t n = _rx_count.load(std::memory_order_relaxed);
+        char buf[32];
+        if (n == 0) {
+            snprintf(buf, sizeof(buf), "USB waiting...");
+        } else {
+            snprintf(buf, sizeof(buf), "USB rx:%lu", (unsigned long)n);
+        }
+        LvglLockGuard lock;
+        lv_label_set_text(_status_label, buf);
+    }
+
     {
         LvglLockGuard lock;
         GetStackChan().update();
@@ -181,6 +216,7 @@ void AppPiControl::onClose()
 
     {
         LvglLockGuard lock;
+        _status_label = nullptr;
         GetStackChan().resetAvatar();
     }
 }
